@@ -13,11 +13,12 @@ pub fn config(solver_addr: &SocketAddr) -> tests::Config {
 node-url = 'http://localhost:8545'
 [dex]
 chain-id = '1'
-endpoint = 'http://{solver_addr}/bgw-pro/swapx/pro/'
+endpoint = 'http://127.0.0.1:{}/bgw-pro/swapx/pro/'
 [dex.credentials]
 api-key = 'test-api-key'
 api-secret = 'test-api-secret-1234'
 ",
+        solver_addr.port()
     ))
 }
 
@@ -28,11 +29,12 @@ pub fn config_with_buy_orders(solver_addr: &SocketAddr) -> tests::Config {
 node-url = 'http://localhost:8545'
 [dex]
 chain-id = '1'
-endpoint = 'http://{solver_addr}/bgw-pro/swapx/pro/'
+endpoint = 'http://127.0.0.1:{}/bgw-pro/swapx/pro/'
 enable-buy-orders = true
 [dex.credentials]
 api-key = 'test-api-key'
 api-secret = 'test-api-secret-1234'
 ",
+        solver_addr.port()
     ))
 }

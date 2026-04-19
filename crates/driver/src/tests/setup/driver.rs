@@ -216,8 +216,8 @@ async fn create_config_file(
     writeln!(file, "app-data-fetching-enabled = true").unwrap();
     writeln!(
         file,
-        r#"orderbook-url = "http://{}""#,
-        config.orderbook.addr
+        r#"orderbook-url = "http://127.0.0.1:{}""#,
+        config.orderbook.addr.port()
     )
     .unwrap();
     writeln!(file, "flashloans-enabled = {}", config.flashloans_enabled).unwrap();
@@ -311,20 +311,20 @@ async fn create_config_file(
         write!(
             file,
             r#"[[solver]]
-               name = "{}"
-               endpoint = "http://{}"
-               absolute-slippage = "{}"
-               relative-slippage = "{}"
-               account = "{}"
-               solving-share-of-deadline = {}
-               http-time-buffer = "{}ms"
-               fee-handler = {}
-               merge-solutions = {}
-               haircut-bps = {}
-               max-solutions-to-propose = {}
-               "#,
+           name = "{}"
+           endpoint = "http://127.0.0.1:{}"
+           absolute-slippage = "{}"
+           relative-slippage = "{}"
+           account = "{}"
+           solving-share-of-deadline = {}
+           http-time-buffer = "{}ms"
+           fee-handler = {}
+           merge-solutions = {}
+           haircut-bps = {}
+           max-solutions-to-propose = {}
+           "#,
             solver.name,
-            addr,
+            addr.port(),
             solver
                 .slippage
                 .absolute

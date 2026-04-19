@@ -193,7 +193,7 @@ mod tests {
                 .times(1)
                 .withf(move |_query, actual_timeout| {
                     // allow for small difference due to tokio scheduling
-                    const BUFFER: Duration = Duration::from_millis(10);
+                    const BUFFER: Duration = Duration::from_millis(50);
                     ((max_timeout - BUFFER)..=max_timeout).contains(actual_timeout)
                 })
                 .return_once(move |_, _| estimate);

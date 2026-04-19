@@ -1,4 +1,5 @@
-use tokio::signal::{unix, unix::SignalKind};
+#[cfg(unix)]
+use tokio::signal::unix::{self, SignalKind};
 
 pub mod mock;
 pub mod solution;
@@ -13,4 +14,9 @@ async fn shutdown_signal() {
         _ = interrupt.recv() => (),
         _ = terminate.recv() => (),
     };
+}
+
+#[cfg(windows)]
+async fn shutdown_signal() {
+    let _ = tokio::signal::ctrl_c().await;
 }

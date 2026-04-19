@@ -89,6 +89,5 @@ async fn shutdown_signal() {
 
 #[cfg(windows)]
 async fn shutdown_signal() {
-    // We don't support signal handling on Windows.
-    std::future::pending().await
+    let _ = tokio::signal::ctrl_c().await;
 }

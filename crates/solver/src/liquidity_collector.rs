@@ -232,12 +232,13 @@ mod test {
         let source = BackgroundInitLiquiditySource::new(
             "fake_reinit",
             init,
-            Duration::from_millis(10),
-            Some(Duration::from_millis(10)),
+            Duration::from_millis(100),
+            Some(Duration::from_millis(100)),
         );
 
-        // wait for 5 full re-init cycles
-        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+        // wait for 5 full re-init cycles, plus a small amount as cycle is not equal to
+        // wall clock
+        tokio::time::sleep(tokio::time::Duration::from_millis(550)).await;
 
         // init loop ran expected number of times (note that we allow for slight
         // variance due to our very short timeouts here).

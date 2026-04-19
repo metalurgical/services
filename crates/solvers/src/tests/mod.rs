@@ -59,7 +59,9 @@ impl SolverEngine {
         let handle = tokio::spawn(crate::run(args, Some(bind)));
 
         let addr = bind_receiver.await.unwrap();
-        let url = format!("http://{addr}/").parse().unwrap();
+        let url = format!("http://127.0.0.1:{}/", addr.port())
+            .parse()
+            .unwrap();
 
         Self {
             url,

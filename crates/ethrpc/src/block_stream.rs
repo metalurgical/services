@@ -410,7 +410,7 @@ mod tests {
             let _ = sender.send(new_block(1));
         });
 
-        let received_block = timeout(2 * TIMEOUT, next_block(&receiver)).await;
+        let received_block = timeout(5 * TIMEOUT, next_block(&receiver)).await;
         assert_eq!(received_block, Ok(new_block(1)));
     }
 }

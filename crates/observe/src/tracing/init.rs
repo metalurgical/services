@@ -1,12 +1,9 @@
 use {
     crate::{
         config::Config,
-        tracing::{
-            distributed::{
-                request_id::RequestIdLayer,
-                trace_id_format::{TraceIdFmt, TraceIdJsonFormat},
-            },
-            reload_handler::spawn_reload_handler,
+        tracing::distributed::{
+            request_id::RequestIdLayer,
+            trace_id_format::{TraceIdFmt, TraceIdJsonFormat},
         },
     },
     opentelemetry::{KeyValue, global, trace::TracerProvider},
@@ -27,6 +24,9 @@ use {
         util::SubscriberInitExt,
     },
 };
+
+#[cfg(unix)]
+use crate::tracing::reload_handler::spawn_reload_handler;
 
 /// Initializes tracing setup that is shared between the binaries.
 /// `env_filter` has similar syntax to env_logger. It is documented at
@@ -94,8 +94,12 @@ fn set_tracing_subscriber(config: &Config) {
         }};
     }
 
+    #[cfg(unix)]
     let (env_filter, reload_handle) =
         tracing_subscriber::reload::Layer::new(EnvFilter::new(&initial_filter));
+
+    #[cfg(windows)]
+    let (env_filter, _) = tracing_subscriber::reload::Layer::new(EnvFilter::new(&initial_filter));
 
     let tracing_layer = if let Some(tracing_config) = &config.tracing {
         global::set_text_map_propagator(TraceContextPropagator::new());
@@ -168,9 +172,8 @@ fn set_tracing_subscriber(config: &Config) {
         );
     }
 
-    if cfg!(unix) {
-        spawn_reload_handler(initial_filter, reload_handle);
-    }
+    #[cfg(unix)]
+    spawn_reload_handler(initial_filter, reload_handle);
 }
 
 /// Panic hook that prints roughly the same message as the default panic hook

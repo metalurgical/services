@@ -37,7 +37,7 @@ impl ShutdownController {
                 },
             }
         }
-        #[cfg(not(unix))]
+        #[cfg(windows)]
         {
             tokio::signal::ctrl_c()
                 .await

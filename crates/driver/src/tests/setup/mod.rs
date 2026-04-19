@@ -1096,7 +1096,11 @@ impl Test {
     pub async fn solve_with_solver(&self, solver: &str) -> Solve<'_> {
         let res = self
             .client
-            .post(format!("http://{}/{}/solve", self.driver.addr, solver))
+            .post(format!(
+                "http://127.0.0.1:{}/{}/solve",
+                self.driver.addr.port(),
+                solver
+            ))
             .header("X-Auction-Id", self.auction_id)
             .json(&driver::solve_req(self))
             .send()
@@ -1118,8 +1122,8 @@ impl Test {
         let res = self
             .client
             .post(format!(
-                "http://{}/{}/reveal",
-                self.driver.addr,
+                "http://127.0.0.1:{}/{}/reveal",
+                self.driver.addr.port(),
                 solver::NAME
             ))
             .json(&driver::reveal_req(
@@ -1176,8 +1180,9 @@ impl Test {
         let res = self
             .client
             .post(format!(
-                "http://{}/{}/settle",
-                self.driver.addr, solver_name
+                "http://127.0.0.1:{}/{}/settle",
+                self.driver.addr.port(),
+                solver_name
             ))
             .json(&driver::settle_req(
                 submission_deadline_latest_block,

@@ -321,13 +321,15 @@ async fn buy_enabled() {
 node-url = 'http://localhost:8545'
 [dex]
 chain-id = '1'
-sell-orders-endpoint = 'http://{solver_addr}/'
-buy-orders-endpoint = 'http://{solver_addr}/'
+sell-orders-endpoint = 'http://127.0.0.1:{}/'
+buy-orders-endpoint = 'http://127.0.0.1:{}/'
 api-project-id = '1'
 api-key = '1234'
 api-secret-key = '1234567890123456'
 api-passphrase = 'pass'
 ",
+            solver_addr.port(),
+            solver_addr.port(),
         ))
     }
 

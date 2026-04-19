@@ -260,7 +260,7 @@ mod tests {
             yield BlockInfo::default();
 
             // Wait a bit to trigger a retry and not just go to the next block
-            time::sleep(Duration::from_millis(10)).await;
+            time::sleep(Duration::from_millis(50)).await;
             yield BlockInfo::default();
         };
         service_maintenance

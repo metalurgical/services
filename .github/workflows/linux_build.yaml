@@ -1,0 +1,103 @@
+name: linux build
+
+on:
+  pull_request:
+  merge_group:
+  push:
+    branches: [main, cross-platform]
+  workflow_dispatch:
+
+jobs:
+  linux-build:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+
+    env:
+      CARGO_PROFILE_DEV_DEBUG: 0
+      CARGO_PROFILE_TEST_DEBUG: 0
+      CARGO_TERM_COLOR: always
+      RUST_BACKTRACE: 1
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+
+      - uses: Swatinem/rust-cache@v2.9.1
+        with:
+          key: linux
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@e4767ccc6762bc4347ef2275c75ea77f5f36e27f # nextest
+
+      - name: Show versions
+        run: |
+          rustup --version
+          rustup show
+          cargo --version
+          rustc --version
+          cargo nextest --version
+
+      - name: Check workspace
+        run: cargo check --workspace --all-targets --locked
+
+      - name: Build workspace tests
+        run: cargo build --workspace --tests --locked
+
+      - name: Run unit tests
+        run: cargo nextest run --workspace --locked
+
+  lint:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Install stable Rust
+        run: rustup toolchain install stable --profile minimal
+
+      - uses: Swatinem/rust-cache@v2.9.1
+        with:
+          key: linux-lint
+
+      - name: Install nightly rustfmt
+        uses: actions-rs/toolchain@b2417cde72dcf67f306c0ae8e0828a81bf0b189f # v1.0.6
+        with:
+          profile: minimal
+          toolchain: nightly
+          components: rustfmt
+
+      - name: Install just
+        uses: extractions/setup-just@v4
+        with:
+          just-version: 1.39.0
+
+      - name: Install tombi
+        uses: tombi-toml/setup-tombi@v1.0.8
+
+      - name: Show versions
+        run: |
+          rustup --version
+          rustup show
+          cargo --version
+          cargo +nightly fmt --version
+          cargo clippy --version
+          tombi --version
+
+      - name: Check Rust formatting
+        run: just fmt --check
+
+      - name: Run clippy
+        run: just clippy
+
+      - name: Check TOML formatting
+        run: just fmt-toml --check

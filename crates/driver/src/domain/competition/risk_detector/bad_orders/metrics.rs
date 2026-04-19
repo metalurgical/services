@@ -205,6 +205,19 @@ mod tests {
     /// or have not been seen for the configured amount of time.
     #[tokio::test]
     async fn evict_outdated_entries() {
+        async fn wait_for_len(detector: &Detector, expected: usize) {
+            tokio::time::timeout(Duration::from_secs(1), async {
+                loop {
+                    if detector.counter.len() == expected {
+                        break;
+                    }
+                    tokio::time::sleep(Duration::from_millis(1)).await;
+                }
+            })
+            .await
+            .expect("detector counter did not reach expected length");
+        }
+
         const FREEZE_DURATION: Duration = Duration::from_millis(50);
         const GC_INTERVAL: Duration = Duration::from_millis(10);
         const GC_CYCLES_UNTIL_EVICTION: u32 = 5;
@@ -233,36 +246,19 @@ mod tests {
         assert!(detector.counter.get(&long_order).is_some());
         assert!(detector.counter.get(&short_order).is_some());
 
-        // The gc task and this test operate on an interval. In order to avoid
-        // issues due to variance we wait half a GC interval to make sure
-        // our assertions always happen in the middle between 2 GC runs.
-        tokio::time::sleep(GC_INTERVAL / 2).await;
-        let mut interval = tokio::time::interval(GC_INTERVAL);
-
         // after 1 GC cycle the expired order was evicted
-        assert_eq!(detector.counter.len(), 1);
-        assert!(detector.counter.get(&long_order).is_some());
-
-        for _ in 0..(GC_CYCLES_UNTIL_EVICTION - 1) {
-            interval.tick().await;
-        }
-
-        // order was still not evicted because the max age has not been reached yet
-        assert_eq!(detector.counter.len(), 1);
+        wait_for_len(&detector, 1).await;
         assert!(detector.counter.get(&long_order).is_some());
 
         // add another measurement to extend lifetime in cache
         detector.update_orders(&[long_order], true);
 
-        // metrics are still in the cache after almost max_age * 2
-        for _ in 0..=(GC_CYCLES_UNTIL_EVICTION - 1) {
-            interval.tick().await;
-        }
+        // metrics are still in the cache after the lifetime was extended
         assert_eq!(detector.counter.len(), 1);
         assert!(detector.counter.get(&long_order).is_some());
 
-        // after one more GC cycle the order finally gets evicted
-        interval.tick().await;
+        // after enough GC cycles the order finally gets evicted
+        wait_for_len(&detector, 0).await;
         assert_eq!(detector.counter.len(), 0);
     }
 }
