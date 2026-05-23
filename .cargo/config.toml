@@ -1,5 +1,0 @@
-[build]
-rustc-wrapper = "C:\\sscache\\sccache.exe"
-target-dir = "H:\\services\\target"
-jobs = 1
-incremental = true
