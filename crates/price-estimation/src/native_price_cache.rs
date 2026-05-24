@@ -1058,6 +1058,10 @@ mod tests {
     #[tokio::test]
     async fn maintenance_can_update_concurrently() {
         const WAIT_TIME_MS: u64 = 100;
+        const MAINTENANCE_INTERVAL_MS: u64 = 50;
+        const MAINTENANCE_TIMEOUT_MS: u64 = 2_000;
+        const CACHE_TTL_MS: u64 = 5_000;
+        const MAINTENANCE_REFRESH_AGE_MS: u64 = 30;
         const BATCH_SIZE: usize = 100;
         let mut inner = MockNativePriceEstimating::new();
         inner
@@ -1075,7 +1079,7 @@ mod tests {
                 .boxed()
             });
 
-        let cache = Cache::new(Duration::from_millis(30), Default::default());
+        let cache = Cache::new(Duration::from_millis(CACHE_TTL_MS), Default::default());
         let estimator = CachingNativePriceEstimator::new(
             Box::new(inner),
             cache,
@@ -1083,19 +1087,26 @@ mod tests {
             Default::default(),
             HEALTHY_PRICE_ESTIMATION_TIME,
         );
-        let all_tokens: HashSet<_> = (0..BATCH_SIZE as u64)
-            .map(|u| Address::left_padding_from(&u.to_be_bytes()))
-            .collect();
+        let tokens: Vec<_> = (0..BATCH_SIZE as u64).map(token).collect();
+        let all_tokens: HashSet<_> = tokens.iter().copied().collect();
+
+        let prices = estimator
+            .fetch_prices(&tokens, HEALTHY_PRICE_ESTIMATION_TIME)
+            .await;
+        for token in &tokens {
+            let price = prices.get(token).unwrap().as_ref().unwrap();
+            assert_eq!(price.to_i64().unwrap(), 1);
+        }
+
         let updater = NativePriceUpdater::new(
             estimator.clone(),
-            Duration::from_millis(50),
-            Duration::default(),
+            Duration::from_millis(MAINTENANCE_INTERVAL_MS),
+            Duration::from_millis(CACHE_TTL_MS - MAINTENANCE_REFRESH_AGE_MS),
         );
         updater
             .update_tokens_and_fetch_prices(all_tokens, Duration::ZERO)
             .await;
 
-        let tokens: Vec<_> = (0..BATCH_SIZE as u64).map(token).collect();
         for token in &tokens {
             let price = estimator
                 .estimate_native_price(*token, HEALTHY_PRICE_ESTIMATION_TIME)
@@ -1105,7 +1116,31 @@ mod tests {
         }
 
         // wait for maintenance cycle
-        tokio::time::sleep(Duration::from_millis(60 + WAIT_TIME_MS)).await;
+        tokio::time::timeout(Duration::from_millis(MAINTENANCE_TIMEOUT_MS), async {
+            loop {
+                let mut updated = true;
+
+                for token in &tokens {
+                    let price = estimator
+                        .estimate_native_price(*token, HEALTHY_PRICE_ESTIMATION_TIME)
+                        .await
+                        .unwrap();
+
+                    if price.to_i64().unwrap() != 2 {
+                        updated = false;
+                        break;
+                    }
+                }
+
+                if updated {
+                    break;
+                }
+
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .unwrap();
 
         for token in &tokens {
             let price = estimator
