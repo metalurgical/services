@@ -658,14 +658,13 @@ impl Competition {
             tasks.app_data.clone()
         );
 
-        let auction = Self::run_blocking_with_timer("update_orders", move || {
+        Self::run_blocking_with_timer("update_orders", move || {
             // Same as before with sort_orders, we use spawn_blocking() because a lot of CPU
             // bound computations are happening and we want to avoid blocking
             // the runtime.
             Self::update_orders(auction, balances, app_data, cow_amm_orders)
         })
-        .await;
-        auction
+        .await
     }
 
     // Oders already need to be sorted from most relevant to least relevant so that
