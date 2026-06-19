@@ -37,7 +37,7 @@ use {
         time::Instant,
     },
     tokio::{sync::mpsc, task},
-    tracing::{Instrument, instrument},
+    tracing::Instrument,
 };
 
 pub mod auction;
@@ -48,7 +48,7 @@ pub mod solution;
 pub mod sorting;
 
 use {
-    crate::infra::notify::liquidity_sources::LiquiditySourceNotifying,
+    crate::{domain::Liquidity, infra::notify::liquidity_sources::LiquiditySourceNotifying},
     eth_domain_types::BlockNo,
     ethrpc::block_stream::BlockInfo,
 };
@@ -329,16 +329,7 @@ impl Competition {
                 Error::MalformedRequest
             })?;
 
-        let auction = self.assemble_auction(&tasks).await;
-
-        let liquidity = async {
-            match self.solver.liquidity() {
-                solver::Liquidity::Fetch => tasks.liquidity.await,
-                solver::Liquidity::Skip => Arc::new(Vec::new()),
-            }
-        }
-        .await;
-
+        let (auction, liquidity) = self.assemble_auction(&tasks).await;
         let elapsed = start.elapsed();
         metrics::get()
             .auction_preprocessing
@@ -597,7 +588,7 @@ impl Competition {
         Some(solved.id.get())
     }
 
-    async fn assemble_auction(&self, tasks: &DataFetchingTasks) -> Auction {
+    async fn assemble_auction(&self, tasks: &DataFetchingTasks) -> (Auction, Arc<Vec<Liquidity>>) {
         let (base_auction, cow_amm_orders) =
             tokio::join!(tasks.auction.clone(), tasks.cow_amm_orders.clone());
 
@@ -633,14 +624,48 @@ impl Competition {
             tasks.app_data.clone()
         );
 
-        let auction = Self::run_blocking_with_timer("update_orders", move || {
+        let mut auction = Self::run_blocking_with_timer("update_orders", move || {
             // Same as before with sort_orders, we use spawn_blocking() because a lot of CPU
             // bound computations are happening and we want to avoid blocking
             // the runtime.
             Self::update_orders(auction, balances, app_data, cow_amm_orders)
         })
         .await;
-        self.without_unsupported_orders(auction).await
+
+        let risk_detector = self.risk_detector.clone();
+        let flashloans_enabled = self.solver.config().flashloans_enabled;
+        let liquidity_mode = self.solver.liquidity();
+
+        // We can run bad token filtering and liquidity fetching in parallel
+        let (auction, liquidity) = tokio::join!(
+            tokio::spawn(
+                async move {
+                    risk_detector
+                        .without_unsupported_orders(&mut auction.orders, flashloans_enabled)
+                        .await;
+                    auction
+                }
+                .in_current_span(),
+            ),
+            tokio::spawn(
+                async move {
+                    match liquidity_mode {
+                        solver::Liquidity::Fetch => tasks.liquidity.await,
+                        solver::Liquidity::Skip => Arc::new(Vec::new()),
+                    }
+                }
+                .in_current_span(),
+            ),
+        );
+        let auction = auction.map_err(|err| {
+            tracing::error!(?err, "order filtering task failed");
+            Error::InternalError(err.to_string())
+        })?;
+        let liquidity = liquidity.map_err(|err| {
+            tracing::error!(?err, "liquidity fetch task failed");
+            Error::InternalError(err.to_string())
+        })?;
+        (auction, liquidity)
     }
 
     // Oders already need to be sorted from most relevant to least relevant so that
@@ -956,16 +981,6 @@ impl Competition {
         }
         Ok(())
     }
-
-    #[instrument(skip_all)]
-    async fn without_unsupported_orders(&self, mut auction: Auction) -> Auction {
-        if !self.solver.config().flashloans_enabled {
-            auction.orders.retain(|o| o.app_data.flashloan().is_none());
-        }
-        self.risk_detector
-            .filter_unsupported_orders_in_auction(auction)
-            .await
-    }
 }
 
 const MAX_SOLUTIONS_TO_MERGE: usize = 10;
@@ -1087,4 +1102,6 @@ pub enum Error {
     NoValidOrdersFound,
     #[error("could not parse the request")]
     MalformedRequest,
+    #[error("internal error: {0}")]
+    InternalError(String),
 }
